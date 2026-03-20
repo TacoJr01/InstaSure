@@ -1,0 +1,14 @@
+{
+  "name": "ais-monorepo",
+  "private": true,
+  "workspaces": ["backend", "web"],
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:web": "cd web && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:web\"",
+    "install:all": "npm install && cd mobile && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
