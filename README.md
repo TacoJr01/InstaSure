@@ -10,9 +10,9 @@
 
 India's gig economy (Swiggy, Zomato, Zepto, Amazon) runs on volatile, unpredictable income. Delivery workers lose **20–30% of their weekly earnings** due to disruptions they have no control over:
 
-- 🌧️ **Environmental** — rain, heat, pollution
-- 🚧 **Social** — curfews, strikes, zone closures
-- 📉 **Invisible** — demand drops, platform outages
+-  **Environmental** — rain, heat, pollution
+-  **Social** — curfews, strikes, zone closures
+-  **Invisible** — demand drops, platform outages
 
 ### Why Current Insurance Fails
 
@@ -34,11 +34,11 @@ India's gig economy (Swiggy, Zomato, Zepto, Amazon) runs on volatile, unpredicta
 
 **InstaSure** is an AI-powered parametric insurance platform built specifically for gig workers. It:
 
-- 🔮 **Predicts** disruption risk before it happens
-- 📊 **Dynamically adjusts** weekly coverage and pricing
-- ⚡ **Automatically compensates** workers for income loss
-- 🛡️ **Validates authenticity** via the GigTrust Score
-- 🤖 Requires **zero manual claims**
+-  **Predicts** disruption risk before it happens
+-  **Dynamically adjusts** weekly coverage and pricing
+-  **Automatically compensates** workers for income loss
+-  **Validates authenticity** via the GigTrust Score
+-  Requires **zero manual claims**
 
 ---
 
@@ -68,8 +68,8 @@ No rain, no curfew — but orders drop by 60%.
 **InstaSure detects:** deviation from 7-day historical average, cross-validated with nearby workers
 
 **InstaSure prompts Rahul to verify:**
-- 📍 GPS confirms he is in his active delivery zone
-- 📸 Selfie submitted from his pickup location via the app
+-  GPS confirms he is in his active delivery zone
+-  Selfie submitted from his pickup location via the app
 
 ➡️ **₹200 compensation triggered once verified**
 
