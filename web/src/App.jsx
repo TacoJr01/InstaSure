@@ -5,7 +5,8 @@ import Coverage from './screens/Coverage.jsx';
 import Activity from './screens/Activity.jsx';
 import Payouts from './screens/Payouts.jsx';
 import Profile from './screens/Profile.jsx';
-import { fetchDashboard } from './api.js';
+import Onboarding from './screens/Onboarding.jsx';
+import { fetchDashboard, postOnboard } from './api.js';
 
 const TABS = [
   {
@@ -79,13 +80,26 @@ const screenVariants = {
 const SCREEN_ORDER = ['home', 'coverage', 'activity', 'payouts', 'profile'];
 
 export default function App() {
+  const [onboarded, setOnboarded] = useState(() => !!localStorage.getItem('ais_onboarded'));
   const [tab, setTab] = useState('home');
   const [prevTab, setPrevTab] = useState('home');
   const [dashboard, setDashboard] = useState(null);
 
   useEffect(() => {
-    fetchDashboard().then(setDashboard).catch(() => setDashboard(getMockDashboard()));
-  }, []);
+    if (!onboarded) return;
+    function load() {
+      fetchDashboard().then(setDashboard).catch(() => setDashboard(getMockDashboard()));
+    }
+    load();
+    const interval = setInterval(load, 15000);
+    return () => clearInterval(interval);
+  }, [onboarded]);
+
+  function handleOnboardComplete(data) {
+    postOnboard(data).catch(() => {});
+    localStorage.setItem('ais_onboarded', '1');
+    setOnboarded(true);
+  }
 
   const direction = SCREEN_ORDER.indexOf(tab) - SCREEN_ORDER.indexOf(prevTab);
 
@@ -129,59 +143,68 @@ export default function App() {
           <line x1="90" y1="0" x2="0" y2="160" stroke="#1E1E28" strokeWidth="0.8"/>
         </svg>
 
-        {/* Screens */}
-        <div style={styles.screenArea}>
-          <AnimatePresence custom={direction} mode="popLayout">
-            <motion.div
-              key={tab}
-              custom={direction}
-              variants={screenVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              style={styles.screenWrapper}
-            >
-              <Screen dashboard={dashboard} />
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Bottom Nav */}
-        <div style={styles.nav}>
-          {TABS.map((t) => {
-            const active = tab === t.id;
-            return (
-              <motion.button
-                key={t.id}
-                onClick={() => goTo(t.id)}
-                style={{ ...styles.navBtn, background: active ? `${TAB_COLORS[t.id]}18` : 'transparent' }}
-                whileTap={{ scale: 0.88 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-              >
+        {!onboarded ? (
+          /* Onboarding — full screen area, no nav */
+          <div style={styles.onboardArea}>
+            <Onboarding onComplete={handleOnboardComplete} />
+          </div>
+        ) : (
+          <>
+            {/* Screens */}
+            <div style={styles.screenArea}>
+              <AnimatePresence custom={direction} mode="popLayout">
                 <motion.div
-                  animate={{ y: active ? -2 : 0 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                  style={{ width: 22, height: 22 }}
+                  key={tab}
+                  custom={direction}
+                  variants={screenVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  style={styles.screenWrapper}
                 >
-                  {t.icon(active)}
+                  <Screen dashboard={dashboard} />
                 </motion.div>
-                <motion.span
-                  animate={{ color: active ? TAB_COLORS[t.id] : 'var(--faint)', fontWeight: active ? 600 : 400 }}
-                  style={styles.navLabel}
-                >
-                  {t.label}
-                </motion.span>
-                {active && (
-                  <motion.div
-                    layoutId="navPip"
-                    style={{ ...styles.navPip, background: TAB_COLORS[t.id] }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  />
-                )}
-              </motion.button>
-            );
-          })}
-        </div>
+              </AnimatePresence>
+            </div>
+
+            {/* Bottom Nav */}
+            <div style={styles.nav}>
+              {TABS.map((t) => {
+                const active = tab === t.id;
+                return (
+                  <motion.button
+                    key={t.id}
+                    onClick={() => goTo(t.id)}
+                    style={{ ...styles.navBtn, background: active ? `${TAB_COLORS[t.id]}18` : 'transparent' }}
+                    whileTap={{ scale: 0.88 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                  >
+                    <motion.div
+                      animate={{ y: active ? -2 : 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      style={{ width: 22, height: 22 }}
+                    >
+                      {t.icon(active)}
+                    </motion.div>
+                    <motion.span
+                      animate={{ color: active ? TAB_COLORS[t.id] : 'var(--faint)', fontWeight: active ? 600 : 400 }}
+                      style={styles.navLabel}
+                    >
+                      {t.label}
+                    </motion.span>
+                    {active && (
+                      <motion.div
+                        layoutId="navPip"
+                        style={{ ...styles.navPip, background: TAB_COLORS[t.id] }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                      />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </motion.div>
     </div>
   );
@@ -232,6 +255,21 @@ const styles = {
     zIndex: 0,
     width: '100%',
     height: '100%',
+  },
+  onboardArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+    overflow: 'hidden',
+    paddingTop: 68,
+    paddingBottom: 24,
+    paddingLeft: 24,
+    paddingRight: 24,
+    display: 'flex',
+    flexDirection: 'column',
   },
   screenArea: {
     position: 'absolute',
@@ -308,5 +346,6 @@ function getMockDashboard() {
     lastPayout: { amount: 300, reason: 'Rain', date: 'Today', time: '11:42 AM' },
     alerts: [{ id: 'a1', type: 'rain', title: 'Rain today', message: "Orders may slow. You're fully covered.", badge: 'AUTO ON' }],
     compensationEligible: true,
+    gigTrust: { score: 742, tier: 'high', trend: '+12 this week', payoutMode: 'Instant payout unlocked' },
   };
 }
