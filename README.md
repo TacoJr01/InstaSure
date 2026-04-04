@@ -10,9 +10,9 @@
 
 India's gig economy (Swiggy, Zomato, Zepto, Amazon) runs on volatile, unpredictable income. Delivery workers lose **20–30% of their weekly earnings** due to disruptions they have no control over:
 
--  **Environmental** — rain, heat, pollution
--  **Social** — curfews, strikes, zone closures
--  **Invisible** — demand drops, platform outages
+- **Environmental** — rain, heat, pollution
+- **Social** — curfews, strikes, zone closures
+- **Invisible** — demand drops, platform outages
 
 ### Why Current Insurance Fails
 
@@ -24,7 +24,7 @@ India's gig economy (Swiggy, Zomato, Zepto, Amazon) runs on volatile, unpredicta
 | Blind | Cannot detect demand-side income loss |
 | Weak | Basic fraud protection only |
 
-### 🔍 Key Insight
+### Key Insight
 
 > The biggest income losses are **invisible** — caused by demand fluctuations, not just weather or closures. Traditional insurance cannot detect or respond to this.
 
@@ -34,120 +34,120 @@ India's gig economy (Swiggy, Zomato, Zepto, Amazon) runs on volatile, unpredicta
 
 **InstaSure** is an AI-powered parametric insurance platform built specifically for gig workers. It:
 
--  **Predicts** disruption risk before it happens
--  **Dynamically adjusts** weekly coverage and pricing
--  **Automatically compensates** workers for income loss
--  **Validates authenticity** via the GigTrust Score
--  Requires **zero manual claims**
-
----
-
-## 👤 Persona & Scenarios
-
-### Rahul — Food Delivery Partner, Age 26
-- Earns ₹600–₹1000/day
-- Works 8–10 hours/day
-- Depends on lunch and dinner peak hours
-
----
-
-### 🌧️ Scenario 1: Heavy Rainfall
-
-Sudden rainfall in Rahul's delivery zone causes orders to drop significantly.
-
-**InstaSure detects:** rainfall threshold crossed + reduced worker activity
-
-➡️ **₹300 payout triggered automatically**
-
----
-
-### 💥 Scenario 2: Demand Drop *(Key Differentiator)*
-
-No rain, no curfew — but orders drop by 60%.
-
-**InstaSure detects:** deviation from 7-day historical average, cross-validated with nearby workers
-
-**InstaSure prompts Rahul to verify:**
--  GPS confirms he is in his active delivery zone
--  Selfie submitted from his pickup location via the app
-
-➡️ **₹200 compensation triggered once verified**
-
----
-
-### 🚧 Scenario 3: Zone Closure / Curfew
-
-Rahul's area becomes inaccessible.
-
-**InstaSure detects:** geo-restriction + worker inactivity
-
-➡️ **Auto payout triggered**
-
----
-
-## ⚙️ System Workflow
-
-```
-Onboarding → AI Risk Profiling → Weekly Policy Generation
-     → Real-Time Monitoring → Parametric Trigger Engine
-          → GigTrust Validation → Zero-Touch Payout
-```
-
-1. **Onboarding** — worker inputs location, platform, work pattern
-2. **AI Risk Profiling** — predicts disruption probability using historical + environmental data
-3. **Weekly Policy Generation** — dynamic premium (₹25–₹60) based on risk + GigTrust Score
-4. **Real-Time Monitoring** — weather APIs, demand signals, worker activity feeds
-5. **Parametric Trigger Engine** — detects disruption events via thresholds + anomaly detection
-6. **GigTrust Validation** — validates authenticity before releasing payout
-7. **Instant Payout** — simulated UPI transfer, zero manual input required
+- **Predicts** disruption risk before it happens
+- **Dynamically adjusts** weekly coverage and pricing
+- **Automatically compensates** workers for income loss
+- **Validates authenticity** via the GigTrust Score
+- Requires **zero manual claims**
 
 ---
 
 ## 💰 Weekly Premium Model
 
-Weekly premiums match gig workers' earning cycles and keep commitment low for higher adoption.
+Premiums are strictly **weekly** (₹20–₹50/week), aligned with gig workers' earning cycles.
 
-### Dynamic Pricing Inputs
-- Area risk score
-- Historical disruption frequency
-- Worker consistency
-- GigTrust Score
+### Pricing Formula
 
-| Risk Level | Worker Type | Weekly Premium |
-|---|---|---|
-| Low | Safe area | ₹25 |
-| Medium | Moderate risk | ₹40 |
-| High | Flood-prone zone | ₹60 |
+```
+premium_base = Σ(trigger_probability × coverage_payout) × actuarial_load
 
-**Coverage:** ₹200–₹500 payout per verified event, trigger-based (not claim-based), risk pooled across users.
+Where:
+  trigger_probability  = weekly city risk (from CITY_RISK table or MOCK_HISTORICAL_RISK)
+  coverage_payout      = per-event payout amount selected by worker (₹200–₹1000)
+  actuarial_load       = 0.32 (operating expenses + profit margin)
+
+Adjustments:
+  × GTS multiplier     = high: 0.85 | medium: 1.0 | low: 1.25
+  × UW tier loading    = preferred: 1.0 | standard: 1.0 | restricted: 1.30
+
+Final cap: max(₹20, min(₹50, premium))
+```
+
+### Pricing Example (Rahul, Chennai, High GTS)
+
+| Trigger     | City Prob | Coverage | Expected |
+|-------------|-----------|----------|----------|
+| Rain        | 8%        | ₹800     | ₹64      |
+| Pollution   | 3%        | ₹200     | ₹6       |
+| Low Orders  | 12%       | ₹500     | ₹60      |
+| Curfew      | 5%        | ₹300     | ₹15      |
+| **Total**   |           |          | **₹145** |
+
+`₹145 × 0.85 (high GTS) × 1.0 (preferred UW) × 0.32 (load) = ₹39/week`
+
+### Audit Logging
+
+Every premium calculation is logged:
+```
+[PRICING] worker=Rahul Sharma city=Chennai gts=high(×0.85) uwTier=preferred(×1.0) expectedLoss=₹145 premium=₹39
+```
+
+---
+
+## 🏗️ Underwriting Tiers
+
+Two independent tier systems apply:
+
+### 1. GTS Tier (Reliability / Fraud Risk)
+Based on GigTrust Score (300–900):
+
+| Tier   | Score Range | Premium Multiplier |
+|--------|-------------|-------------------|
+| High   | 700–900     | ×0.85 (discount)  |
+| Medium | 500–699     | ×1.00             |
+| Low    | <500        | ×1.25 (loading)   |
+
+### 2. Activity Tier (Engagement / Underwriting Risk)
+Based on `activity_days_last_30` (same as `activeDeliveryDays` field):
+
+| Tier       | Active Days (30d) | Premium Multiplier | Effect                        |
+|------------|------------------|--------------------|-------------------------------|
+| Preferred  | ≥15 days         | ×1.00              | Full coverage at base premium |
+| Standard   | 5–14 days        | ×1.00              | Full coverage at base premium |
+| Restricted | <5 days          | ×1.30              | 30% surcharge, held payouts   |
+
+**Restricted workers:** auto-payouts are held for manual review. GPS + selfie verification required for all claims.
 
 ---
 
 ## ⚡ Parametric Trigger System
 
-### Environmental & Social Triggers
-- Rainfall or AQI above defined thresholds
-- Curfew or zone closure detected
+### Trigger Configuration
 
-### Advanced Triggers *(Key Differentiators)*
+| Trigger     | Threshold                          | Default Payout | Auto-Pay |
+|-------------|-----------------------------------|----------------|----------|
+| Rain        | Heavy rainfall in worker zone      | ₹300           | Yes      |
+| Low Orders  | ≥50% demand drop vs 7-day average  | ₹200           | No (GPS + selfie verify) |
+| Curfew      | Zone geo-restriction detected      | ₹250           | Yes      |
+| Pollution   | AQI threshold breach               | ₹200           | No       |
 
-**Demand Drop Detection**
-- ≥50% drop vs 7-day rolling average
-- Cross-validated with activity from nearby workers
+### Hyperlocal Validation
 
-**Platform Outage Detection**
-- No order allocation detected
-- App inactivity signals
+Each trigger is validated against:
+- Worker's registered city (city-level risk pool)
+- Worker's zone (hyperlocal confirmation)
+- Worker's active hours (e.g. rain at 3am doesn't trigger for 10am–10pm worker)
 
-**Multi-Factor Validation**
-- External data + worker activity + peer comparison
-- Eliminates single-point-of-failure decisions
+### Historical Risk Data
+
+Precomputed weekly probabilities per city (source: MOCK_HISTORICAL_RISK, simulated from IMD/SAFAR 2022–2023):
+
+| City      | Rain | Pollution | Low Orders | Curfew | Risk Score |
+|-----------|------|-----------|------------|--------|------------|
+| Delhi     | 6%   | 25%       | 12%        | 8%     | 82         |
+| Mumbai    | 18%  | 4%        | 10%        | 5%     | 78         |
+| Chennai   | 8%   | 3%        | 12%        | 5%     | 72         |
+| Bangalore | 10%  | 4%        | 15%        | 4%     | 68         |
+| Hyderabad | 7%   | 5%        | 14%        | 3%     | 62         |
+| Pune      | 9%   | 3%        | 11%        | 3%     | 58         |
+
+> **Integration note:** Replace `annualTriggerDays` in `MOCK_HISTORICAL_RISK` with live API values (OpenWeather, SAFAR, civic APIs) without any refactoring.
 
 ---
 
 ## 🧠 GigTrust Score (GTS)
 
-A real-time reliability score (300–900) assigned to every worker — similar to a credit score, but for gig behavior.
+A real-time reliability score (300–900) — like a credit score for gig behavior.
 
 ### Score Components
 - Work consistency
@@ -156,92 +156,148 @@ A real-time reliability score (300–900) assigned to every worker — similar t
 - Claim history
 - Peer comparison
 
-### How It's Used
+### Payout Mode by GTS
 
-| Trust Level | Action |
-|---|---|
-| High (700–900) | Instant payout |
-| Medium (500–699) | Partial or delayed payout |
-| Low (<500) | Flag + hold for review |
-
----
-
-## 🤖 AI / ML Integration
-
-| Model | Purpose |
-|---|---|
-| Risk Prediction | Disruption probability per worker/week |
-| Dynamic Pricing Engine | Weekly premium adjustment |
-| Demand Anomaly Detection | Identifies abnormal order-volume drops |
-| Fraud Detection System | Catches GPS spoofing, fake inactivity |
-| GigTrust Engine | Real-time behavioral scoring |
+| Score Range | Action |
+|-------------|--------|
+| 700–900 | Instant auto-payout |
+| 500–699 | Partial / delayed payout |
+| <500    | Hold → manual fraud review |
 
 ---
 
-## 🚨 Adversarial Defense & Anti-Spoofing
+## 🚨 Claim Automation Pipeline
 
-**Core principle: no single signal is ever trusted alone.**
+**Zero-touch flow — no manual claim filing, no document upload:**
 
-### Fraud Detection Layers
+```
+1. Trigger Detection     → threshold breach detected (weather/demand API)
+2. Policy Validation     → check active coverage, active days ≥7, not suspended
+3. Fraud Check           → GTS tier + activity tier + GPS spoofing detection
+4. Payout Decision       → auto-pay (high/medium GTS + preferred/standard UW)
+                         → hold (low GTS or restricted UW)
+5. UPI Transfer          → instant simulated UPI payout
+```
 
-1. **Multi-Signal Validation** — GPS + activity + time patterns, eliminates single-point failure
-2. **Behavioral Fingerprinting** — each worker has a baseline; sudden peak-hour inactivity or unrealistic movement triggers a flag
-3. **Peer-Based Anomaly Detection** — real disruptions affect all workers in a zone; fraud affects only a synchronized subset
-4. **Demand vs Activity Correlation** — a demand drop must be consistent across workers, not isolated to a few
-5. **GPS Spoofing Detection** — flags impossible speeds, static coordinates, and location jumps
-6. **Claim Pattern Analysis** — repeated payouts and outlier behavior vs peers trigger review
+### Fraud Checks Applied
+- GPS coordinate validation (static coords → flag)
+- Platform activity cross-validation
+- Duplicate claim prevention (same trigger, same worker, same day)
+- Peer-based zone validation (fraud affects subset; real events affect whole zone)
+- Claim pattern analysis (>3 claims/week vs zone peers → flag)
 
-### Fraud Ring Detection
-
-Detects clusters of coordinated actors and flags the entire group rather than individuals.
-
-### Protecting Genuine Workers
-
-- Peer-based validation means no worker is penalized on a single signal
-- Confidence-based payouts ensure legitimate claims still go through
-- Transparent GigTrust score lets workers understand and improve their standing
+### Claim Audit Log Format
+```
+[CLAIM] AUTO-PAID  | worker=Rahul Sharma trigger=rain     amount=₹300 gts=742 uwTier=preferred
+[CLAIM] HELD       | worker=Arjun Mehta  trigger=rain     amount=₹300 gts=481 uwTier=standard  reason=fraud-check
+[CLAIM] APPROVED(admin) | payout=ap8 worker=Arjun Mehta trigger=rain amount=₹300
+[CLAIM] REJECTED(admin) | payout=ap9 worker=Sneha Patel trigger=lowOrders gts_impact=-20
+```
 
 ---
 
-## 🏗️ Architecture
+## 📊 Actuarial Model
 
-![Architecture](assets/readme_diagram.svg)
+### BCR (Burning Cost Rate)
+```
+BCR = total_claims / total_premiums
+```
+
+| BCR Range | Status     | Action                              |
+|-----------|------------|-------------------------------------|
+| <0.55     | Under      | Premiums may be too high            |
+| 0.55–0.70 | Healthy    | Target zone                         |
+| 0.71–0.85 | Elevated   | Monitor; consider premium review    |
+| >0.85     | Over       | **Suspend new enrollments**         |
+
+### Stress Scenario: 14-Day Monsoon
+- Affected cities: Mumbai + Chennai
+- Extra claims modelled at ₹300 × 2 events × affected workers
+- If projected BCR > 0.85 → capital alert raised in Actuary screen
+
+### Actuarial Assumptions
+
+| Assumption | Value | Notes |
+|------------|-------|-------|
+| Avg daily income | ₹700 | Median gig worker, India 2024 |
+| Days exposed/week | 5 | Standard gig schedule |
+| Income replacement rate | 40% | Per-event compensation fraction |
+| Actuarial load | 0.32 | Ops + profit margin |
+| Historical premiums (seed) | ₹2,400 | Bootstrap for BCR calculation |
+| Weekly premium range | ₹20–₹50 | Affordability constraint |
+| Activity threshold | 5 days/30d | Below → restricted UW tier |
+| Restricted UW loading | 1.30× | 30% surcharge |
+
+---
+
+## ⚙️ System Workflow
+
+```
+Registration → Risk Profiling → Weekly Policy Generation
+     → Real-Time Monitoring → Parametric Trigger Engine
+          → GigTrust Validation → Zero-Touch Payout
+```
+
+1. **Registration** — name, phone, platform, city, zone, work hours, PIN (≤6 steps)
+2. **Risk Profiling** — city risk pool assigned, actuarial premium calculated
+3. **Weekly Policy** — dynamic premium (₹20–₹50) based on city risk + GTS + activity tier
+4. **Real-Time Monitoring** — simulated weather/demand triggers
+5. **Trigger Engine** — threshold-based detection per city/zone/hour
+6. **GigTrust Validation** — multi-layer fraud check before payout
+7. **Instant Payout** — simulated UPI transfer, zero manual input
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer | Technologies |
+| Layer | Technology |
 |---|---|
-| Frontend | React Native (worker app), React.js (admin dashboard) |
-| Backend | Node.js, Express, REST APIs |
-| AI / ML | Python, scikit-learn |
-| Database | MongoDB, PostgreSQL |
-| Integrations | OpenWeather API, mock demand data, Razorpay (test mode) |
+| Worker App | React + Vite (port 5173) |
+| Admin Dashboard | React + Vite (port 5174) |
+| Backend API | Node.js + Express (port 3001) |
+| Animations | Framer Motion |
+| Fonts | Sora, DM Serif Display, DM Mono |
 
 ---
 
-## 💰 Business Model
+## 🚀 Running the Project
 
-### Revenue Streams
-- Weekly subscription: ₹20–₹80 per worker
-- Platform partnerships (B2B2C)
-- Insurance company collaborations
+```bash
+# Backend
+cd backend && npm install && npm start
 
-### Unit Economics
-- 1,000 workers × ₹50/week = **₹50,000/week revenue**
-- Claims at ~30% = ₹15,000–₹20,000/week
-- **Profitable with strong risk modeling and GigTrust fraud control**
+# Worker app
+cd web && npm install && npm run dev
+
+# Admin dashboard
+cd admin && npm install && npm run dev
+```
+
+**Demo credentials:**
+- Worker: phone `9100000001`, PIN `1234` (Rahul Sharma, Chennai)
+- Admin: `admin@instasure.com` / `Admin@123`
 
 ---
 
-## 📈 Scalability Roadmap
+## 📈 Business Model
 
-- Expand to Uber/Ola drivers and freelancers
-- IRDAI compliance pathway for real payouts
-- Pan-India deployment starting with high-density metros
-- Direct platform API integrations (Swiggy, Zomato)
-- B2B2C white-labeling for delivery companies
+| Metric | Value |
+|---|---|
+| Weekly subscription | ₹20–₹50/worker |
+| 1,000 workers revenue | ₹50,000/week |
+| Target BCR | 0.55–0.70 |
+| Profitable at | BCR < 0.70 |
+
+---
+
+## 🔹 Resource Constraints
+
+This prototype uses **lightweight mocked alternatives** in place of real external APIs:
+
+- `MOCK_HISTORICAL_RISK` — simulated IMD/SAFAR data (replaces real API calls)
+- `CITY_RISK` — precomputed weekly probabilities (pluggable with live data)
+- GigTrust scoring — rule-based (pluggable with ML model)
+- All models are structured for **real data plug-in without refactoring**
 
 ---
 
@@ -250,31 +306,12 @@ Detects clusters of coordinated actors and flags the entire group rather than in
 | Feature | Traditional Insurance | InstaSure |
 |---|---|---|
 | Claims | Manual | Zero-touch |
-| Pricing | Static | AI-dynamic |
+| Pricing | Static annual | AI-dynamic weekly |
 | Coverage | Visible events only | + Demand drop + outages |
-| Fraud Detection | Basic | Multi-layer adversarial defense |
-| Trust Layer | None | GigTrust Score (300–900) |
-| Payout Speed | Days to weeks | Instant (UPI) |
-
----
-
-## 🏗️ Development Plan
-
-### Phase 1 — Foundation
-- Research & system design
-- Define triggers & pricing logic
-- Basic UI/UX prototypes
-
-### Phase 2 — Core Build
-- Worker onboarding flow
-- Pricing engine
-- Parametric trigger system
-- Claims processing
-
-### Phase 3 — Intelligence Layer
-- Fraud detection & GigTrust engine
-- Instant UPI payouts
-- Admin dashboard & analytics
+| Fraud | Basic | Multi-layer GTS + UW tier |
+| Trust | None | GigTrust Score (300–900) |
+| Payout Speed | Days to weeks | Instant UPI |
+| Pricing Model | Annual premium | ₹20–₹50/week |
 
 ---
 

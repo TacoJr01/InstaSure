@@ -42,6 +42,33 @@ const GTS_MULTIPLIERS = { high:0.85, medium:1.0, low:1.25 };
 const ACTUARIAL_LOAD  = 0.32;
 const actuaryState    = { historicalPremiums: 2400 };
 
+// ── PRICING ASSUMPTIONS (auditable — swap real data here) ──
+// Formula: premium = Σ(trigger_probability × avg_payout_per_event) × gtsM × uwLoad × actuarialLoad
+// avg_payout_per_event proxies: avg_income_lost_per_day × days_disrupted × income_replacement_rate
+// e.g. rain: ₹700/day × 1.5 disrupted days × 40% replacement = ₹420 → capped at coverage amount
+const PRICING_ASSUMPTIONS = {
+  avgDailyIncome:        700,   // ₹ — median gig worker daily income (India, 2024)
+  daysExposedPerWeek:    5,     // active working days per week
+  incomeReplacementRate: 0.40,  // fraction of income loss compensated per event
+  weeklyPremiumMin:      20,    // ₹ — affordability floor
+  weeklyPremiumMax:      50,    // ₹ — affordability cap
+  activityThresholdDays: 5,     // active days in last 30 → below this = restricted underwriting tier
+  restrictedTierLoading: 1.30,  // 30% premium surcharge for restricted-tier workers
+};
+
+// ── MOCK HISTORICAL TRIGGER RISK (precomputed, pluggable) ──
+// Source: simulated from IMD / SAFAR / civic data patterns (2022–2023).
+// To integrate real data: replace annualTriggerDays with live API-derived values.
+// weeklyProbability ≈ annualTriggerDays / 52  (already reflected in CITY_RISK above)
+const MOCK_HISTORICAL_RISK = {
+  Delhi:     { rain:{ annualDays:28, peakMonths:[7,8,9],    avgHrs:3.8 }, pollution:{ annualDays:112, peakMonths:[11,12,1,2], avgHrs:18 }, lowOrders:{ annualDays:52, peakMonths:[4,5,6],    avgHrs:6 }, curfew:{ annualDays:8,  peakMonths:[2,3],       avgHrs:12 } },
+  Mumbai:    { rain:{ annualDays:65, peakMonths:[6,7,8,9],  avgHrs:5.2 }, pollution:{ annualDays:14,  peakMonths:[11,12],     avgHrs:8  }, lowOrders:{ annualDays:38, peakMonths:[6,7,8],    avgHrs:6 }, curfew:{ annualDays:5,  peakMonths:[3],         avgHrs:10 } },
+  Chennai:   { rain:{ annualDays:42, peakMonths:[10,11,12], avgHrs:4.5 }, pollution:{ annualDays:12,  peakMonths:[11,12],     avgHrs:6  }, lowOrders:{ annualDays:45, peakMonths:[6,7,10,11],avgHrs:5 }, curfew:{ annualDays:4,  peakMonths:[12,1],      avgHrs:8  } },
+  Bangalore: { rain:{ annualDays:50, peakMonths:[6,7,8,9],  avgHrs:3.5 }, pollution:{ annualDays:15,  peakMonths:[11,12],     avgHrs:7  }, lowOrders:{ annualDays:55, peakMonths:[5,6,7],    avgHrs:5 }, curfew:{ annualDays:3,  peakMonths:[2],         avgHrs:8  } },
+  Hyderabad: { rain:{ annualDays:35, peakMonths:[7,8,9],    avgHrs:4.0 }, pollution:{ annualDays:20,  peakMonths:[11,12,1],   avgHrs:10 }, lowOrders:{ annualDays:52, peakMonths:[4,5,6],    avgHrs:5 }, curfew:{ annualDays:2,  peakMonths:[3],         avgHrs:8  } },
+  Pune:      { rain:{ annualDays:45, peakMonths:[6,7,8,9],  avgHrs:3.8 }, pollution:{ annualDays:10,  peakMonths:[11,12],     avgHrs:6  }, lowOrders:{ annualDays:42, peakMonths:[5,6,7],    avgHrs:5 }, curfew:{ annualDays:2,  peakMonths:[2],         avgHrs:8  } },
+};
+
 // ── ADMIN SETTINGS ─────────────────────────────────────────
 const adminSettings = {
   triggers: {
@@ -51,7 +78,7 @@ const adminSettings = {
     outage:    { enabled:false, autoPay:false, payoutAmount:150, label:'Platform Outage'},
   },
   gigtrust: { highMin:700, mediumMin:500 },
-  premium:  { minPremium:25, maxPremium:80, coverageDivisor:1800 },
+  premium:  { minPremium:PRICING_ASSUMPTIONS.weeklyPremiumMin, maxPremium:PRICING_ASSUMPTIONS.weeklyPremiumMax, coverageDivisor:1800 },
   platform: { active:true, maintenanceMode:false, fraudAutoSuspend:true },
 };
 
@@ -127,16 +154,49 @@ function calcGtsTier(score) {
   return 'low';
 }
 
-function calcActuarialPremium(worker, cov) {
-  const city = CITY_RISK[worker.location] || { rain:0.08, pollution:0.03, lowOrders:0.12, curfew:0.05 };
-  const gtsM = GTS_MULTIPLIERS[worker.gtsTier] || 1.0;
-  const { minPremium, maxPremium } = adminSettings.premium;
-  const expected =
-    (city.rain      * (cov.rain      || 0)) +
-    (city.pollution * (cov.pollution || 0)) +
-    (city.lowOrders * (cov.lowOrders || 0)) +
-    (city.curfew    * (cov.curfew    || 0));
-  return Math.max(minPremium, Math.min(maxPremium, Math.round(expected * gtsM * ACTUARIAL_LOAD)));
+// Underwriting tier based on activity in last 30 days (<5 days → restricted).
+// Restricted workers get a 30% premium loading (higher risk due to inactivity).
+function getUnderwritingTier(worker) {
+  const days = worker.activeDeliveryDays || 0;
+  if (days < PRICING_ASSUMPTIONS.activityThresholdDays) return 'restricted';
+  if (days < 15)  return 'standard';
+  return 'preferred';
+}
+
+// Weekly premium formula (auditable):
+//   premium_base = Σ(trigger_probability × coverage_payout) × actuarialLoad
+//   trigger_probability  = weekly city risk (from CITY_RISK / MOCK_HISTORICAL_RISK)
+//   coverage_payout      = per-event payout amount chosen by worker
+//   actuarialLoad        = 0.32 (ops + margin)
+//   Adjustments applied: GTS multiplier + underwriting tier loading
+//   Final cap: ₹20–₹50/week (PRICING_ASSUMPTIONS.weeklyPremiumMin/Max)
+function calcActuarialPremium(worker, cov, shouldLog = false) {
+  const city   = CITY_RISK[worker.location] || { rain:0.08, pollution:0.03, lowOrders:0.12, curfew:0.05 };
+  const gtsM   = GTS_MULTIPLIERS[worker.gtsTier] || 1.0;
+  const uwTier = getUnderwritingTier(worker);
+  const uwLoad = uwTier === 'restricted' ? PRICING_ASSUMPTIONS.restrictedTierLoading : 1.0;
+  const { weeklyPremiumMin, weeklyPremiumMax } = PRICING_ASSUMPTIONS;
+
+  const components = {
+    rain:      city.rain      * (cov.rain      || 0),
+    pollution: city.pollution * (cov.pollution || 0),
+    lowOrders: city.lowOrders * (cov.lowOrders || 0),
+    curfew:    city.curfew    * (cov.curfew    || 0),
+  };
+  const expectedWeeklyLoss = Object.values(components).reduce((s, v) => s + v, 0);
+  const premium = Math.max(
+    weeklyPremiumMin,
+    Math.min(weeklyPremiumMax, Math.round(expectedWeeklyLoss * gtsM * uwLoad * ACTUARIAL_LOAD))
+  );
+
+  if (shouldLog) {
+    console.log(
+      `[PRICING] worker=${worker.name} city=${worker.location} gts=${worker.gtsTier}(×${gtsM})` +
+      ` uwTier=${uwTier}(×${uwLoad}) expectedLoss=₹${Math.round(expectedWeeklyLoss)}` +
+      ` premium=₹${premium} (min:${weeklyPremiumMin} max:${weeklyPremiumMax})`
+    );
+  }
+  return premium;
 }
 
 function getGtsComponents(w) {
@@ -163,6 +223,15 @@ app.post('/api/auth/register', (req, res) => {
   const { name, phone, pin, platform, location, zone, workHours } = req.body;
   if (!name || !phone || !pin) return res.status(400).json({ error: 'Name, phone and PIN are required' });
   if (workers.find(w => w.phone === phone)) return res.status(409).json({ error: 'Phone number already registered' });
+
+  // BCR guard: suspend new enrollments if loss ratio exceeds 85%
+  const paidClaims   = allPayouts.filter(p => p.status === 'paid').reduce((s,p) => s+p.amount, 0);
+  const totalPremiums= actuaryState.historicalPremiums + workers.reduce((s,w) => s+w.premium, 0);
+  const currentBcr   = totalPremiums > 0 ? paidClaims / totalPremiums : 0;
+  if (currentBcr > 0.85) {
+    console.log(`[ACTUARIAL] BCR=${currentBcr.toFixed(3)} > 0.85 — new enrollment suspended`);
+    return res.status(503).json({ error: 'New enrolments temporarily paused due to high pool loss ratio. Please try again soon.' });
+  }
 
   const id          = `u${workerIdCounter++}`;
   const policyNum   = `ISP-${new Date().getFullYear()}-${String(id.slice(1)).padStart(4,'0')}`;
@@ -191,9 +260,10 @@ app.post('/api/auth/register', (req, res) => {
     policyRenewal: renewalStr,
     coverage: { rain:800, lowOrders:500, pollution:200, curfew:300 },
   };
-  newWorker.premium = calcActuarialPremium(newWorker, newWorker.coverage);
+  newWorker.premium = calcActuarialPremium(newWorker, newWorker.coverage, true);
   workers.push(newWorker);
   const token = createToken(id);
+  console.log(`[REGISTER] ${newWorker.name} | ${newWorker.platform}, ${newWorker.location}/${newWorker.zone} | uwTier=${getUnderwritingTier(newWorker)} | premium=₹${newWorker.premium}/week`);
   res.json({ success:true, token, worker: { id: newWorker.id, name: newWorker.name, initials: newWorker.initials } });
 });
 
@@ -238,7 +308,7 @@ app.patch('/api/coverage', (req, res) => {
   if (lowOrders !== undefined) w.coverage.lowOrders = lowOrders;
   if (pollution !== undefined) w.coverage.pollution = pollution;
   if (curfew    !== undefined) w.coverage.curfew    = curfew;
-  const newPremium = calcActuarialPremium(w, w.coverage);
+  const newPremium = calcActuarialPremium(w, w.coverage, true);
   w.premium = newPremium;
   res.json({ ...w.coverage, protection, premium: newPremium });
 });
@@ -271,16 +341,28 @@ app.get('/api/gigtrust', (req, res) => {
 });
 
 app.get('/api/policy', (req, res) => {
-  const w = getWorkerFromToken(req);
+  const w       = getWorkerFromToken(req);
+  const uwTier  = getUnderwritingTier(w);
+  const uwLoad  = uwTier === 'restricted' ? PRICING_ASSUMPTIONS.restrictedTierLoading : 1.0;
+  const cityR   = CITY_RISK[w.location] || {};
   res.json({
-    policyNumber:        w.policyNumber,
-    activeDeliveryDays:  w.activeDeliveryDays,
-    policyStart:         w.policyStart,
-    policyRenewal:       w.policyRenewal,
-    eligibleForCoverage: w.activeDeliveryDays >= 7,
-    underwritingTier:    w.gtsTier,
-    cityRiskPool:        (CITY_RISK[w.location] || {}).pool || `${w.location} Pool`,
-    location:            w.location,
+    policyNumber:           w.policyNumber,
+    activeDeliveryDays:     w.activeDeliveryDays,
+    activityDays30:         w.activeDeliveryDays, // same field, named per spec
+    policyStart:            w.policyStart,
+    policyRenewal:          w.policyRenewal,
+    eligibleForCoverage:    w.activeDeliveryDays >= 7,
+    // GTS-based tier (fraud/reliability)
+    underwritingTier:       w.gtsTier,
+    // Activity-based tier (engagement)
+    activityTier:           uwTier,
+    activityTierLoading:    uwLoad,
+    activityThreshold:      PRICING_ASSUMPTIONS.activityThresholdDays,
+    cityRiskPool:           cityR.pool || `${w.location} Pool`,
+    cityRiskScore:          cityR.riskScore || 0,
+    location:               w.location,
+    weeklyPremium:          w.premium,
+    premiumRange:           { min: PRICING_ASSUMPTIONS.weeklyPremiumMin, max: PRICING_ASSUMPTIONS.weeklyPremiumMax },
   });
 });
 
@@ -374,6 +456,8 @@ app.post('/api/verify', (req, res) => {
   w.weeklyEarnings += 200;
   w.gtsScore = Math.min(900, w.gtsScore + 10);
   w.gtsTier  = calcGtsTier(w.gtsScore);
+  // Claim automation log
+  console.log(`[CLAIM] APPROVED | worker=${w.name}(${w.id}) trigger=lowOrders amount=₹200 gps=verified selfie=verified gts=${w.gtsScore} zone=${w.zone},${w.location}`);
   res.json({ success:true, payout, message:'₹200 payout triggered and sent to your UPI.' });
 });
 
@@ -441,9 +525,11 @@ app.patch('/api/admin/payouts/:id', (req, res) => {
   if (action === 'approve') {
     p.status = 'paid';
     if (w) { w.weeklyEarnings += p.amount; w.gtsScore = Math.min(900, w.gtsScore + 5); w.gtsTier = calcGtsTier(w.gtsScore); }
+    console.log(`[CLAIM] APPROVED(admin) | payout=${p.id} worker=${p.workerName} trigger=${p.type} amount=₹${p.amount}`);
   } else if (action === 'reject') {
     p.status = 'rejected';
     if (w) { w.gtsScore = Math.max(300, w.gtsScore - 20); w.gtsTier = calcGtsTier(w.gtsScore); }
+    console.log(`[CLAIM] REJECTED(admin) | payout=${p.id} worker=${p.workerName} trigger=${p.type} amount=₹${p.amount} gts_impact=-20`);
   }
   res.json(p);
 });
@@ -565,18 +651,33 @@ app.post('/api/admin/simulate', (req, res) => {
       badge: isAutoPay ? 'AUTO ON' : 'VERIFY',
     });
     if (isAutoPay) {
-      const payout = {
-        id:`ap${allPayouts.length+1}`, workerId:w.id, workerName:w.name,
-        platform:w.platform, amount:payoutAmount, reason:triggerCfg?.label||type,
-        type, date:'Today', time:now, auto:true, status:'paid',
-      };
-      allPayouts.unshift(payout);
-      w.weeklyEarnings += payoutAmount;
+      // Zero-touch claim pipeline: trigger → policy check → GTS fraud check → payout
+      const uwTier = getUnderwritingTier(w);
+      const gtsOk  = w.gtsTier !== 'low' || !adminSettings.platform.fraudAutoSuspend;
+      if (gtsOk && uwTier !== 'restricted') {
+        const payout = {
+          id:`ap${allPayouts.length+1}`, workerId:w.id, workerName:w.name,
+          platform:w.platform, amount:payoutAmount, reason:triggerCfg?.label||type,
+          type, date:'Today', time:now, auto:true, status:'paid',
+        };
+        allPayouts.unshift(payout);
+        w.weeklyEarnings += payoutAmount;
+        console.log(`[CLAIM] AUTO-PAID | worker=${w.name} trigger=${type} amount=₹${payoutAmount} gts=${w.gtsScore} uwTier=${uwTier}`);
+      } else {
+        const held = {
+          id:`ap${allPayouts.length+1}`, workerId:w.id, workerName:w.name,
+          platform:w.platform, amount:payoutAmount, reason:triggerCfg?.label||type,
+          type, date:'Today', time:now, auto:false, status:'held',
+        };
+        allPayouts.unshift(held);
+        console.log(`[CLAIM] HELD | worker=${w.name} trigger=${type} gts=${w.gtsScore} uwTier=${uwTier} reason=fraud-check`);
+      }
     } else {
       compensationMap[w.id] = true;
     }
   });
 
+  console.log(`[SIMULATE] trigger=${type} zone=${simZone} autoPay=${isAutoPay} amount=₹${payoutAmount}`);
   res.json({ success:true, alert:newAdminAlert, autoPaid:isAutoPay, payoutAmount });
 });
 

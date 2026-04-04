@@ -64,7 +64,7 @@ export default function Login({ onLogin, onRegister }) {
         </div>
         <div>
           <div style={s.brandName}>InstaSure</div>
-          <div style={s.brandSub}>Adaptive Income Shield</div>
+          <div style={s.brandSub}>Gig Worker Income Protection</div>
         </div>
       </motion.div>
 

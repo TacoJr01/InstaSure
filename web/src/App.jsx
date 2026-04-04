@@ -153,7 +153,7 @@ export default function App() {
           transition={{ delay: 1.2, duration: 0.6 }}
           style={styles.desktopHint}
         >
-          Adaptive Income Shield
+          InstaSure · Gig Worker Income Protection
         </motion.div>
 
         {/* Phone shell */}
