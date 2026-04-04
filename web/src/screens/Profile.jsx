@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchUser, fetchGigTrust, fetchPayouts, fetchSettings, patchSettings } from '../api.js';
+import { fetchUser, fetchGigTrust, fetchPayouts, fetchSettings, patchSettings, postLogout } from '../api.js';
+import { useTheme } from '../App.jsx';
 
 const MOCK_USER = { name: 'Rahul Sharma', initials: 'RS', platform: 'Swiggy', location: 'Chennai', zone: 'Velachery', upi: 'rahul@upi', workHours: '10 AM – 10 PM', memberSince: 'Jan 2024', premium: 40 };
 const MOCK_GTS = {
@@ -45,12 +46,13 @@ const ts = {
   thumb: { width: 20, height: 20, borderRadius: '50%', background: '#fff', flexShrink: 0 },
 };
 
-export default function Profile({ dashboard }) {
+export default function Profile({ dashboard, onLogout }) {
   const [user, setUser] = useState(MOCK_USER);
   const [gts, setGts] = useState(MOCK_GTS);
   const [payoutsData, setPayoutsData] = useState({ total: 950, count: 4 });
   const [settings, setSettings] = useState({ autoRenew: true, notifications: true, smartCoverage: true });
   const [gtsScore, setGtsScore] = useState(0);
+  const { theme, toggle: toggleTheme } = useTheme();
 
   useEffect(() => {
     fetchUser().then(setUser).catch(() => {});
@@ -73,6 +75,11 @@ export default function Profile({ dashboard }) {
     const raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [gts.score]);
+
+  async function handleLogout() {
+    try { await postLogout(); } catch {}
+    if (onLogout) onLogout();
+  }
 
   function handleToggle(key) {
     const updated = { ...settings, [key]: !settings[key] };
@@ -273,6 +280,40 @@ export default function Profile({ dashboard }) {
       <motion.div variants={item} style={s.note}>
         You earned ₹{roi} for every ₹1 paid this week.
       </motion.div>
+
+      <motion.div variants={item} style={s.divider} />
+
+      {/* Actions */}
+      <motion.div variants={item} style={s.actionRow}>
+        <motion.button
+          onClick={toggleTheme}
+          style={s.actionBtn}
+          whileTap={{ scale: 0.95 }}
+        >
+          {theme === 'dark' ? (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="8" cy="8" r="3"/><path d="M8 1v1M8 14v1M1 8h1M14 8h1M3.05 3.05l.7.7M12.25 12.25l.7.7M3.05 12.95l.7-.7M12.25 3.75l.7-.7"/>
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13.5 10.5A6 6 0 015.5 2.5a6 6 0 108 8z"/>
+            </svg>
+          )}
+          <span style={s.actionLabel}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+        </motion.button>
+
+        <motion.button
+          onClick={handleLogout}
+          style={{ ...s.actionBtn, ...s.logoutBtn }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--red)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3"/><path d="M11 11l3-3-3-3"/><path d="M14 8H6"/>
+          </svg>
+          <span style={{ ...s.actionLabel, color: 'var(--red)' }}>Sign out</span>
+        </motion.button>
+      </motion.div>
+
       <div style={{ height: 16 }} />
     </motion.div>
   );
@@ -319,4 +360,8 @@ const s = {
   statVal: { fontSize: 22, fontWeight: 900, letterSpacing: '-0.5px' },
   statSub: { fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 10, color: 'var(--muted)', marginTop: 3 },
   note: { padding: 14, background: 'rgba(62,201,122,0.06)', border: '1px solid rgba(62,201,122,0.15)', borderRadius: 14, fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, textAlign: 'center' },
+  actionRow: { display: 'flex', gap: 10 },
+  actionBtn: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 14, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer' },
+  logoutBtn: { border: '1px solid var(--red-dim)', background: 'var(--red-dim)' },
+  actionLabel: { fontSize: 12, fontWeight: 600, color: 'var(--muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.2px' },
 };

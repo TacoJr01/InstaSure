@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchCoverage, patchCoverage, fetchPremiumStatus, postPayment } from '../api.js';
+import { fetchCoverage, patchCoverage, fetchPremiumStatus, postPayment, fetchPolicy, fetchPremiumBreakdown } from '../api.js';
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
@@ -31,9 +31,11 @@ export default function Coverage({ dashboard }) {
   const [premiumStatus, setPremiumStatus] = useState(null);
   const [paySheet, setPaySheet] = useState(false);
   const [pin, setPin]           = useState('');
-  const [paying, setPaying]     = useState(false);
+  const [paying, setPaying]       = useState(false);
   const [payResult, setPayResult] = useState(null);
   const [payError, setPayError]   = useState('');
+  const [policy, setPolicy]       = useState(null);
+  const [breakdown, setBreakdown] = useState(null);
 
   useEffect(() => {
     fetchCoverage()
@@ -43,6 +45,8 @@ export default function Coverage({ dashboard }) {
       })
       .catch(() => {});
     fetchPremiumStatus().then(setPremiumStatus).catch(() => {});
+    fetchPolicy().then(setPolicy).catch(() => {});
+    fetchPremiumBreakdown().then(setBreakdown).catch(() => {});
   }, []);
 
   // Sync premium from dashboard prop too
@@ -85,6 +89,7 @@ export default function Coverage({ dashboard }) {
       if (res.premium) setPremium(res.premium);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
+      fetchPremiumBreakdown().then(setBreakdown).catch(() => {});
     } catch {}
   }
 
@@ -107,6 +112,47 @@ export default function Coverage({ dashboard }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Policy card */}
+      {policy && (
+        <motion.div variants={item} style={s.policyCard}>
+          <div style={s.policyTop}>
+            <span style={s.policyNumber}>{policy.policyNumber}</span>
+            <span style={{ ...s.poolBadge, background: 'var(--coral-dim)', color: 'var(--coral)', border: '1px solid rgba(232,132,58,0.2)' }}>{policy.cityRiskPool}</span>
+          </div>
+          <div style={s.policyMid}>
+            <span style={{
+              ...s.tierBadge,
+              background: policy.underwritingTier === 'high' ? 'rgba(62,201,122,0.1)' : policy.underwritingTier === 'medium' ? 'rgba(232,184,74,0.1)' : 'rgba(232,132,58,0.1)',
+              color: policy.underwritingTier === 'high' ? 'var(--green)' : policy.underwritingTier === 'medium' ? 'var(--amber)' : 'var(--coral)',
+            }}>
+              {policy.underwritingTier.toUpperCase()} TIER
+            </span>
+            <span style={s.policyRenewal}>Renews {policy.policyRenewal}</span>
+          </div>
+          {/* Active delivery days bar */}
+          <div style={s.daysRow}>
+            <span style={s.daysLabel}>Active days</span>
+            <span style={{ ...s.daysVal, color: policy.activeDeliveryDays >= 7 ? 'var(--green)' : 'var(--amber)' }}>{policy.activeDeliveryDays} / 7 min</span>
+          </div>
+          <div style={s.daysTrack}>
+            <motion.div
+              style={{ ...s.daysFill, background: policy.activeDeliveryDays >= 7 ? 'var(--green)' : 'var(--amber)', width: `${Math.min(100, (policy.activeDeliveryDays / 30) * 100)}%` }}
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(100, (policy.activeDeliveryDays / 30) * 100)}%` }}
+              transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+            />
+            {/* 7-day minimum marker */}
+            <div style={{ ...s.daysMarker, left: `${(7 / 30) * 100}%` }} />
+          </div>
+          {!policy.eligibleForCoverage && (
+            <div style={s.ineligibleNote}>
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="var(--amber)" strokeWidth="1.6" strokeLinecap="round"><circle cx="5.5" cy="5.5" r="4.5"/><line x1="5.5" y1="3.5" x2="5.5" y2="5.5"/><circle cx="5.5" cy="7.5" r="0.5" fill="var(--amber)"/></svg>
+              Not yet eligible — need 7 active delivery days for coverage
+            </div>
+          )}
+        </motion.div>
+      )}
 
       <motion.div variants={item}>
         <div style={s.eyebrow}>your plan</div>
@@ -256,6 +302,49 @@ export default function Coverage({ dashboard }) {
         ))}
       </motion.div>
 
+      {/* Pricing breakdown */}
+      {breakdown && (
+        <>
+          <motion.div variants={item} style={s.divider} />
+          <motion.div variants={item}>
+            <div style={s.sectionLabel}>PRICING BREAKDOWN</div>
+          </motion.div>
+          <motion.div variants={item} style={s.card}>
+            <div style={s.formulaHint}>Expected Loss × GTS Multiplier × Load Factor</div>
+            {breakdown.components.map(({ trigger, label, probability, coverage: cov, expected }, i) => {
+              const colors = { rain: 'var(--blue)', lowOrders: 'var(--green)', pollution: 'var(--amber)', curfew: 'var(--purple)' };
+              const color = colors[trigger] || 'var(--muted)';
+              return (
+                <div key={trigger} style={{ ...s.bdRow, borderBottom: i < 3 ? '1px solid #13131A' : 'none' }}>
+                  <div style={{ ...s.dot, background: color, marginTop: 2 }} />
+                  <span style={s.bdLabel}>{label}</span>
+                  <span style={s.bdProb}>{(probability * 100).toFixed(1)}%</span>
+                  <span style={s.bdCov}>× ₹{cov}</span>
+                  <span style={{ ...s.bdExp, color }}>= ₹{expected}</span>
+                </div>
+              );
+            })}
+            <div style={s.bdDivider} />
+            <div style={s.bdFormulaRow}>
+              <span style={s.bdFormulaKey}>Total expected loss</span>
+              <span style={s.bdFormulaVal}>₹{breakdown.totalExpected}</span>
+            </div>
+            <div style={s.bdFormulaRow}>
+              <span style={s.bdFormulaKey}>GTS multiplier ({breakdown.gtsTier})</span>
+              <span style={s.bdFormulaVal}>× {breakdown.gtsMultiplier}</span>
+            </div>
+            <div style={s.bdFormulaRow}>
+              <span style={s.bdFormulaKey}>Load factor (ops + reserves)</span>
+              <span style={s.bdFormulaVal}>× {breakdown.loadFactor}</span>
+            </div>
+            <div style={{ ...s.bdFormulaRow, marginTop: 6, paddingTop: 8, borderTop: '1px solid #13131A' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Weekly premium</span>
+              <span style={{ fontSize: 20, fontWeight: 900, color: 'var(--coral)', letterSpacing: '-0.5px' }}>₹{breakdown.finalPremium}</span>
+            </div>
+          </motion.div>
+        </>
+      )}
+
       <motion.div variants={item} style={{ ...s.note, marginTop: 14 }}>
         Premium adjusts automatically as you change coverage limits
       </motion.div>
@@ -386,6 +475,33 @@ export default function Coverage({ dashboard }) {
 }
 
 const s = {
+  // Policy card
+  policyCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, padding: '14px 16px', marginBottom: 14 },
+  policyTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  policyNumber: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', fontWeight: 600, letterSpacing: '0.3px' },
+  poolBadge: { padding: '3px 10px', borderRadius: 20, fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.3px' },
+  policyMid: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  tierBadge: { padding: '3px 10px', borderRadius: 20, fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, letterSpacing: '0.8px' },
+  policyRenewal: { fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 10, color: 'var(--faint)' },
+  daysRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
+  daysLabel: { fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--faint)', letterSpacing: '0.5px' },
+  daysVal: { fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600 },
+  daysTrack: { height: 5, background: '#1C1C24', borderRadius: 3, overflow: 'visible', position: 'relative' },
+  daysFill: { height: '100%', borderRadius: 3, position: 'absolute', top: 0, left: 0 },
+  daysMarker: { position: 'absolute', top: -3, width: 2, height: 11, background: 'var(--faint)', borderRadius: 1 },
+  ineligibleNote: { display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 10, color: 'var(--amber)', padding: '7px 10px', background: 'rgba(232,184,74,0.06)', border: '1px solid rgba(232,184,74,0.15)', borderRadius: 10 },
+  dot: { width: 7, height: 7, borderRadius: '50%', flexShrink: 0 },
+  // Pricing breakdown
+  formulaHint: { fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 10, color: 'var(--faint)', textAlign: 'center', padding: '8px 0 12px', borderBottom: '1px solid #13131A', marginBottom: 4 },
+  bdRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 0' },
+  bdLabel: { flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text2)' },
+  bdProb: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--faint)', width: 36, textAlign: 'right' },
+  bdCov: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', width: 44, textAlign: 'right' },
+  bdExp: { fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, width: 36, textAlign: 'right' },
+  bdDivider: { height: 1, background: '#13131A', margin: '4px 0 8px' },
+  bdFormulaRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' },
+  bdFormulaKey: { fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--faint)', letterSpacing: '0.2px' },
+  bdFormulaVal: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text2)', fontWeight: 600 },
   suspendedBanner: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--red-dim)', border: '1px solid rgba(232,90,74,0.25)', borderRadius: 12, marginBottom: 14, fontSize: 12, color: 'var(--text2)', lineHeight: 1.4 },
   eyebrow: { fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 12, color: 'var(--muted)' },
   hero: { fontSize: 52, fontWeight: 900, color: 'var(--text)', letterSpacing: '-2px', lineHeight: 1, marginTop: 2 },

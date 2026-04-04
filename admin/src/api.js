@@ -51,6 +51,10 @@ export async function dismissAlert(id) {
   });
   return r.json();
 }
+export async function fetchActuary() {
+  const r = await fetch(`${BASE}/actuary`);
+  return r.json();
+}
 export async function fetchAdminSettings() {
   const r = await fetch(`${BASE}/settings`);
   return r.json();

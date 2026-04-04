@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Home from './screens/Home.jsx';
 import Coverage from './screens/Coverage.jsx';
 import Activity from './screens/Activity.jsx';
 import Payouts from './screens/Payouts.jsx';
 import Profile from './screens/Profile.jsx';
-import Onboarding from './screens/Onboarding.jsx';
-import { fetchDashboard, postOnboard } from './api.js';
+import Login from './screens/Login.jsx';
+import Register from './screens/Register.jsx';
+import { fetchDashboard, fetchMe } from './api.js';
+
+// ─── Theme context ───────────────────────────────────────────────────────────
+export const ThemeCtx = createContext({ theme: 'dark', toggle: () => {} });
+export function useTheme() { return useContext(ThemeCtx); }
 
 const TABS = [
   {
@@ -80,25 +85,52 @@ const screenVariants = {
 const SCREEN_ORDER = ['home', 'coverage', 'activity', 'payouts', 'profile'];
 
 export default function App() {
-  const [onboarded, setOnboarded] = useState(() => !!localStorage.getItem('ais_onboarded'));
-  const [tab, setTab] = useState('home');
+  const [theme, setTheme] = useState(() => localStorage.getItem('ais_theme') || 'dark');
+  const [authState, setAuthState] = useState('loading'); // loading | login | register | app
+  const [tab, setTab]     = useState('home');
   const [prevTab, setPrevTab] = useState('home');
   const [dashboard, setDashboard] = useState(null);
 
+  // Apply theme to :root
   useEffect(() => {
-    if (!onboarded) return;
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('ais_theme', theme);
+  }, [theme]);
+
+  // Check token on mount
+  useEffect(() => {
+    const t = localStorage.getItem('ais_token');
+    if (!t) { setAuthState('login'); return; }
+    fetchMe()
+      .then(data => {
+        if (data && data.id) setAuthState('app');
+        else { localStorage.removeItem('ais_token'); setAuthState('login'); }
+      })
+      .catch(() => setAuthState('app')); // offline fallback — show app anyway
+  }, []);
+
+  // Polling dashboard
+  useEffect(() => {
+    if (authState !== 'app') return;
     function load() {
-      fetchDashboard().then(setDashboard).catch(() => setDashboard(getMockDashboard()));
+      fetchDashboard().then(setDashboard).catch(() => {});
     }
     load();
     const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
-  }, [onboarded]);
+  }, [authState]);
 
-  function handleOnboardComplete(data) {
-    postOnboard(data).catch(() => {});
-    localStorage.setItem('ais_onboarded', '1');
-    setOnboarded(true);
+  function handleLogin(worker) { setAuthState('app'); }
+  function handleRegister(worker) { setAuthState('app'); }
+  function handleLogout() {
+    localStorage.removeItem('ais_token');
+    setDashboard(null);
+    setTab('home');
+    setAuthState('login');
+  }
+
+  function toggleTheme() {
+    setTheme(t => t === 'dark' ? 'light' : 'dark');
   }
 
   const direction = SCREEN_ORDER.indexOf(tab) - SCREEN_ORDER.indexOf(prevTab);
@@ -112,101 +144,143 @@ export default function App() {
   const Screen = screens[tab];
 
   return (
-    <div style={styles.root}>
-      {/* Desktop hint */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.2, duration: 0.6 }}
-        style={styles.desktopHint}
-      >
-        Adaptive Income Shield
-      </motion.div>
+    <ThemeCtx.Provider value={{ theme, toggle: toggleTheme }}>
+      <div style={styles.root}>
+        {/* Desktop hint */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.2, duration: 0.6 }}
+          style={styles.desktopHint}
+        >
+          Adaptive Income Shield
+        </motion.div>
 
-      {/* Phone shell */}
-      <motion.div
-        initial={{ opacity: 0, y: 40, scale: 0.94 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        style={styles.shell}
-      >
-        {/* Dynamic island */}
-        <div style={styles.island} />
+        {/* Phone shell */}
+        <motion.div
+          initial={{ opacity: 0, y: 40, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          style={styles.shell}
+        >
+          {/* Dynamic island */}
+          <div style={styles.island} />
 
-        {/* Grid background */}
-        <svg style={styles.gridBg} viewBox="0 0 390 844" preserveAspectRatio="none">
-          <line x1="90" y1="0" x2="90" y2="844" stroke="#1A1A22" strokeWidth="0.8"/>
-          <line x1="240" y1="0" x2="240" y2="844" stroke="#1A1A22" strokeWidth="0.8"/>
-          <line x1="0" y1="220" x2="390" y2="220" stroke="#1A1A22" strokeWidth="0.8"/>
-          <line x1="0" y1="520" x2="390" y2="520" stroke="#1A1A22" strokeWidth="0.8"/>
-          <line x1="240" y1="0" x2="390" y2="220" stroke="#1E1E28" strokeWidth="0.8"/>
-          <line x1="90" y1="0" x2="0" y2="160" stroke="#1E1E28" strokeWidth="0.8"/>
-        </svg>
+          {/* Grid background */}
+          <svg style={styles.gridBg} viewBox="0 0 390 844" preserveAspectRatio="none">
+            <line x1="90" y1="0" x2="90" y2="844" stroke="var(--grid-line)" strokeWidth="0.8"/>
+            <line x1="240" y1="0" x2="240" y2="844" stroke="var(--grid-line)" strokeWidth="0.8"/>
+            <line x1="0" y1="220" x2="390" y2="220" stroke="var(--grid-line)" strokeWidth="0.8"/>
+            <line x1="0" y1="520" x2="390" y2="520" stroke="var(--grid-line)" strokeWidth="0.8"/>
+            <line x1="240" y1="0" x2="390" y2="220" stroke="var(--grid-line2)" strokeWidth="0.8"/>
+            <line x1="90" y1="0" x2="0" y2="160" stroke="var(--grid-line2)" strokeWidth="0.8"/>
+          </svg>
 
-        {!onboarded ? (
-          /* Onboarding — full screen area, no nav */
-          <div style={styles.onboardArea}>
-            <Onboarding onComplete={handleOnboardComplete} />
-          </div>
-        ) : (
-          <>
-            {/* Screens */}
-            <div style={styles.screenArea}>
-              <AnimatePresence custom={direction} mode="popLayout">
-                <motion.div
-                  key={tab}
-                  custom={direction}
-                  variants={screenVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  style={styles.screenWrapper}
-                >
-                  <Screen dashboard={dashboard} />
-                </motion.div>
-              </AnimatePresence>
+          {authState === 'loading' && (
+            <div style={styles.loadingArea}>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                style={styles.spinner}
+              />
             </div>
+          )}
 
-            {/* Bottom Nav */}
-            <div style={styles.nav}>
-              {TABS.map((t) => {
-                const active = tab === t.id;
-                return (
-                  <motion.button
-                    key={t.id}
-                    onClick={() => goTo(t.id)}
-                    style={{ ...styles.navBtn, background: active ? `${TAB_COLORS[t.id]}18` : 'transparent' }}
-                    whileTap={{ scale: 0.88 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          {authState === 'login' && (
+            <div style={styles.authArea}>
+              <Login onLogin={handleLogin} onRegister={() => setAuthState('register')} />
+            </div>
+          )}
+
+          {authState === 'register' && (
+            <div style={styles.authArea}>
+              <Register onRegister={handleRegister} onBack={() => setAuthState('login')} />
+            </div>
+          )}
+
+          {authState === 'app' && (
+            <>
+              {/* Screens */}
+              <div style={styles.screenArea}>
+                <AnimatePresence custom={direction} mode="popLayout">
+                  <motion.div
+                    key={tab}
+                    custom={direction}
+                    variants={screenVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    style={styles.screenWrapper}
                   >
-                    <motion.div
-                      animate={{ y: active ? -2 : 0 }}
-                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                      style={{ width: 22, height: 22 }}
+                    <Screen dashboard={dashboard} onLogout={handleLogout} />
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              {/* Bottom Nav */}
+              <div style={styles.nav}>
+                {TABS.map((t) => {
+                  const active = tab === t.id;
+                  return (
+                    <motion.button
+                      key={t.id}
+                      onClick={() => goTo(t.id)}
+                      style={{ ...styles.navBtn, background: active ? `${TAB_COLORS[t.id]}18` : 'transparent' }}
+                      whileTap={{ scale: 0.88 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                     >
-                      {t.icon(active)}
-                    </motion.div>
-                    <motion.span
-                      animate={{ color: active ? TAB_COLORS[t.id] : 'var(--faint)', fontWeight: active ? 600 : 400 }}
-                      style={styles.navLabel}
-                    >
-                      {t.label}
-                    </motion.span>
-                    {active && (
                       <motion.div
-                        layoutId="navPip"
-                        style={{ ...styles.navPip, background: TAB_COLORS[t.id] }}
-                        transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                      />
-                    )}
-                  </motion.button>
-                );
-              })}
-            </div>
-          </>
+                        animate={{ y: active ? -2 : 0 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                        style={{ width: 22, height: 22 }}
+                      >
+                        {t.icon(active)}
+                      </motion.div>
+                      <motion.span
+                        animate={{ color: active ? TAB_COLORS[t.id] : 'var(--faint)', fontWeight: active ? 600 : 400 }}
+                        style={styles.navLabel}
+                      >
+                        {t.label}
+                      </motion.span>
+                      {active && (
+                        <motion.div
+                          layoutId="navPip"
+                          style={{ ...styles.navPip, background: TAB_COLORS[t.id] }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                        />
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </motion.div>
+
+        {/* Theme toggle below phone */}
+        {authState === 'app' && (
+          <motion.button
+            onClick={toggleTheme}
+            style={styles.themeBtn}
+            whileTap={{ scale: 0.9 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5 }}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? (
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--faint)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="8" r="3"/><path d="M8 1v1M8 14v1M1 8h1M14 8h1M3.05 3.05l.7.7M12.25 12.25l.7.7M3.05 12.95l.7-.7M12.25 3.75l.7-.7"/>
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--faint)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13.5 10.5A6 6 0 015.5 2.5a6 6 0 108 8z"/>
+              </svg>
+            )}
+          </motion.button>
         )}
-      </motion.div>
-    </div>
+      </div>
+    </ThemeCtx.Provider>
   );
 }
 
@@ -217,7 +291,7 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 12,
   },
   desktopHint: {
     fontFamily: 'var(--font-mono)',
@@ -233,8 +307,8 @@ const styles = {
     borderRadius: 52,
     overflow: 'hidden',
     position: 'relative',
-    border: '1px solid #2A2A36',
-    boxShadow: '0 40px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04) inset',
+    border: '1px solid var(--shell-border)',
+    boxShadow: '0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset',
     flexShrink: 0,
   },
   island: {
@@ -256,12 +330,17 @@ const styles = {
     width: '100%',
     height: '100%',
   },
-  onboardArea: {
+  loadingArea: {
+    position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1,
+  },
+  spinner: {
+    width: 28, height: 28, borderRadius: '50%',
+    border: '2.5px solid var(--border2)',
+    borderTopColor: 'var(--coral)',
+  },
+  authArea: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 1,
     overflow: 'hidden',
     paddingTop: 68,
@@ -273,10 +352,7 @@ const styles = {
   },
   screenArea: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 82,
+    top: 0, left: 0, right: 0, bottom: 82,
     zIndex: 1,
     overflow: 'hidden',
   },
@@ -292,11 +368,9 @@ const styles = {
   },
   nav: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     height: 82,
-    background: 'rgba(10,10,14,0.96)',
+    background: 'var(--nav-bg)',
     borderTop: '1px solid var(--border)',
     display: 'flex',
     alignItems: 'center',
@@ -309,43 +383,24 @@ const styles = {
     backdropFilter: 'blur(20px)',
   },
   navBtn: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 4,
-    border: 'none',
-    cursor: 'pointer',
-    padding: '6px 14px',
-    borderRadius: 14,
-    position: 'relative',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+    border: 'none', cursor: 'pointer', padding: '6px 14px', borderRadius: 14, position: 'relative',
   },
   navLabel: {
-    fontFamily: 'var(--font-mono)',
-    fontSize: 8,
-    letterSpacing: '0.3px',
+    fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.3px',
   },
   navPip: {
-    position: 'absolute',
-    bottom: -2,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: 4,
-    height: 4,
-    borderRadius: '50%',
+    position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)',
+    width: 4, height: 4, borderRadius: '50%',
+  },
+  themeBtn: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 20,
+    padding: '6px 12px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
   },
 };
-
-function getMockDashboard() {
-  return {
-    user: { name: 'Rahul Sharma', platform: 'Swiggy', location: 'Chennai', zone: 'Velachery' },
-    weeklyProtected: 1240,
-    premium: 40,
-    coverageLimit: 1500,
-    weeklyUsagePct: 83,
-    protection: { rain: 'active', lowOrders: 'active', pollution: 'watching', curfew: 'active' },
-    lastPayout: { amount: 300, reason: 'Rain', date: 'Today', time: '11:42 AM' },
-    alerts: [{ id: 'a1', type: 'rain', title: 'Rain today', message: "Orders may slow. You're fully covered.", badge: 'AUTO ON' }],
-    compensationEligible: true,
-    gigTrust: { score: 742, tier: 'high', trend: '+12 this week', payoutMode: 'Instant payout unlocked' },
-  };
-}

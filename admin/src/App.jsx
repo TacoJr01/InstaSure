@@ -5,6 +5,8 @@ import Workers from './screens/Workers.jsx';
 import Payouts from './screens/Payouts.jsx';
 import Alerts from './screens/Alerts.jsx';
 import Settings from './screens/Settings.jsx';
+import Actuary from './screens/Actuary.jsx';
+import AdminLogin from './screens/AdminLogin.jsx';
 import { fetchStats } from './api.js';
 
 const NAV = [
@@ -42,6 +44,17 @@ const NAV = [
     ),
   },
   {
+    id: 'actuary', label: 'Actuary',
+    icon: (active) => (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={active ? '#2DD4BF' : 'var(--muted)'} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 14 L2 6 L5 6 L5 14"/>
+        <path d="M6.5 14 L6.5 3 L9.5 3 L9.5 14"/>
+        <path d="M11 14 L11 8 L14 8 L14 14"/>
+        <line x1="1" y1="14" x2="15" y2="14"/>
+      </svg>
+    ),
+  },
+  {
     id: 'alerts', label: 'Alerts',
     icon: (active) => (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={active ? 'var(--amber)' : 'var(--muted)'} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -66,6 +79,7 @@ const NAV_COLORS = {
   overview: 'var(--coral)',
   workers:  'var(--blue)',
   payouts:  'var(--green)',
+  actuary:  '#2DD4BF',
   alerts:   'var(--amber)',
   settings: 'var(--purple)',
 };
@@ -74,6 +88,7 @@ const PAGE_TITLES = {
   overview: 'Overview',
   workers:  'Workers',
   payouts:  'Payouts',
+  actuary:  'Actuary',
   alerts:   'Alerts',
   settings: 'Settings',
 };
@@ -84,19 +99,46 @@ const screenVariants = {
   exit:   { opacity: 0, y: -8, transition: { duration: 0.18 } },
 };
 
-const SCREENS = { overview: Overview, workers: Workers, payouts: Payouts, alerts: Alerts, settings: Settings };
+const SCREENS = { overview: Overview, workers: Workers, payouts: Payouts, actuary: Actuary, alerts: Alerts, settings: Settings };
 
 export default function App() {
-  const [page, setPage] = useState('overview');
-  const [stats, setStats] = useState({ totalWorkers: 8, flaggedWorkers: 2, suspendedWorkers: 0 });
+  const [theme, setTheme] = useState(() => localStorage.getItem('ais_admin_theme') || 'dark');
+  const [authed, setAuthed] = useState(() => !!localStorage.getItem('ais_admin_token'));
+  const [page, setPage]   = useState('overview');
+  const [stats, setStats] = useState({ totalWorkers: 0, flaggedWorkers: 0, suspendedWorkers: 0 });
   const Screen = SCREENS[page];
 
+  // Apply theme
   useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('ais_admin_theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!authed) return;
     function load() { fetchStats().then(setStats).catch(() => {}); }
     load();
     const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [authed]);
+
+  function handleLogin(token) {
+    setAuthed(true);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('ais_admin_token');
+    setAuthed(false);
+    setPage('overview');
+  }
+
+  function toggleTheme() {
+    setTheme(t => t === 'dark' ? 'light' : 'dark');
+  }
+
+  if (!authed) {
+    return <AdminLogin onLogin={handleLogin} />;
+  }
 
   return (
     <div style={s.root}>
@@ -161,7 +203,40 @@ export default function App() {
           })}
         </nav>
 
+        {/* Footer */}
         <div style={s.sidebarFooter}>
+          {/* Theme toggle */}
+          <motion.button
+            onClick={toggleTheme}
+            style={s.themeBtn}
+            whileTap={{ scale: 0.95 }}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? (
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="8" r="3"/><path d="M8 1v1M8 14v1M1 8h1M14 8h1M3.05 3.05l.7.7M12.25 12.25l.7.7M3.05 12.95l.7-.7M12.25 3.75l.7-.7"/>
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13.5 10.5A6 6 0 015.5 2.5a6 6 0 108 8z"/>
+              </svg>
+            )}
+            <span style={s.themeBtnLabel}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          </motion.button>
+
+          {/* Logout */}
+          <motion.button
+            onClick={handleLogout}
+            style={s.logoutBtn}
+            whileTap={{ scale: 0.95 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3"/><path d="M11 11l3-3-3-3"/><path d="M14 8H6"/>
+            </svg>
+            <span style={s.themeBtnLabel}>Sign out</span>
+          </motion.button>
+
+          <div style={s.footerDivider} />
           <div style={s.footerLabel}>BACKEND</div>
           <div style={s.footerUrl}>localhost:3001</div>
         </div>
@@ -222,9 +297,13 @@ const s = {
   navItem: { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10, border: '1px solid', cursor: 'pointer', position: 'relative', textAlign: 'left' },
   navLabel: { fontSize: 13, letterSpacing: '-0.1px' },
   navIndicator: { position: 'absolute', right: 10, width: 5, height: 5, borderRadius: '50%' },
-  sidebarFooter: { padding: '16px 20px 0', borderTop: '1px solid var(--border)', marginTop: 'auto' },
-  footerLabel: { fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--faint)', letterSpacing: '1px', marginBottom: 4 },
-  footerUrl: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)' },
+  sidebarFooter: { padding: '12px 12px 0', borderTop: '1px solid var(--border)', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4 },
+  themeBtn: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent', width: '100%' },
+  logoutBtn: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent', width: '100%' },
+  themeBtnLabel: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.3px' },
+  footerDivider: { height: 1, background: 'var(--border)', margin: '4px 0' },
+  footerLabel: { fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--faint)', letterSpacing: '1px', padding: '0 10px' },
+  footerUrl: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', padding: '0 10px 4px' },
   // Main
   main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
   topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 32px', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface)' },
