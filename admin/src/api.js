@@ -1,4 +1,4 @@
-const BASE = '/api/admin';
+const BASE = (import.meta.env.VITE_API_URL || '') + '/api/admin';
 
 export async function fetchStats() {
   const r = await fetch(`${BASE}/stats`);
