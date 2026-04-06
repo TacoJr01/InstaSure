@@ -6,7 +6,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Dev only — in production VITE_API_URL points to the live backend
       '/api': 'http://localhost:3001',
     },
+  },
+  build: {
+    outDir: 'dist',
   },
 });

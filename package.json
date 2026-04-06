@@ -1,7 +1,10 @@
 {
   "name": "ais-monorepo",
   "private": true,
-  "workspaces": ["backend", "web"],
+  "workspaces": [
+    "backend",
+    "web"
+  ],
   "scripts": {
     "dev:backend": "cd backend && npm run dev",
     "dev:web": "cd web && npm run dev",
@@ -10,5 +13,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "mongodb": "^7.1.1"
   }
 }
