@@ -10,6 +10,10 @@ coverage/
 build/
 dist/
 
+# md files
+changes.md
+understanding.md
+
 # misc
 .DS_Store
 .env.local

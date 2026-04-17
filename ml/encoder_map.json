@@ -1,0 +1,25 @@
+{
+  "worker_type": [
+    "ecommerce",
+    "food",
+    "qcommerce"
+  ],
+  "location_risk": [
+    "high",
+    "low",
+    "medium"
+  ],
+  "features": [
+    "worker_type_enc",
+    "location_risk_enc",
+    "temperature_celsius",
+    "rainfall_mm",
+    "aqi",
+    "curfew_probability",
+    "zone_closure_probability",
+    "historical_disruption_score",
+    "gps_valid",
+    "claim_history_score",
+    "spoofing_risk"
+  ]
+}
