@@ -14,11 +14,6 @@ dist/
 changes.md
 understanding.md
 
-# python
-ml/venv/
-__pycache__/
-*.pkl
-
 # misc
 .DS_Store
 .env.local
@@ -33,3 +28,6 @@ yarn-debug.log*
 yarn-error.log*
 
 
+# python
+ml/venv/
+__pycache__/
