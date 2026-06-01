@@ -31,7 +31,7 @@ export default function RootLayout() {
     storage.getToken().then(async (token) => {
       if (!token) { setScreen('login'); return; }
       const data = await api.me();
-      if (data?.worker) { setUser(data.worker); setScreen('app'); }
+      if (data?.id) { setUser(data); setScreen('app'); }
       else { await storage.clear(); setScreen('login'); }
     });
   }, []);

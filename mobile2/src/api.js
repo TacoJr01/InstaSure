@@ -54,7 +54,7 @@ export const api = {
   // Auth
   login:    (phone, pin) => post('/auth/login', { phone, pin }),
   register: (data)       => post('/auth/register', data),
-  me:       ()           => get('/me'),
+  me:       ()           => get('/auth/me'),
   logout:   ()           => post('/auth/logout', {}, true),
 
   // App
@@ -66,9 +66,10 @@ export const api = {
   user:             () => get('/user'),
   gigTrust:         () => get('/gigtrust'),
   policy:           () => get('/policy'),
-  premiumStatus:    () => get('/premium/status'),
-  premiumBreakdown: () => get('/premium/breakdown'),
+  premiumStatus:    () => get('/premium-status'),
+  premiumBreakdown: () => get('/premium-breakdown'),
   pay:              (pin) => post('/payment', { pin }, true),
+  verify:           (data) => post('/verify', data, true),
 };
 
 export const storage = {
